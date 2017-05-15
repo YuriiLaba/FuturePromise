@@ -72,6 +72,10 @@ void worker2(int l, int r, const vector<string> &words, promise<words_counter_t>
     auto res = mapper(l, r, words);
     p.set_value(res);
 }
+bool is_ready(future<words_counter_t> const& f)
+{
+    return f.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+}
 
 int main(int argc, char *argv[]) {  // input_file, threads, output_file
     vector<string> words;
@@ -93,9 +97,20 @@ int main(int argc, char *argv[]) {  // input_file, threads, output_file
     }
 
     vector<words_counter_t> results;
+
+
+    //chrono::microseconds span(1000);
+    //for(size_t i = 0; i<result_futures.size(); ++i){
+        //result_futures[i].wait_for(span);
+    //}
+
+
     for(size_t i = 0; i<result_futures.size(); ++i)
     {
-        reducer(m, result_futures[i].get());
+        if(is_ready(result_futures[i])) {
+
+            reducer(m, result_futures[i].get());
+        }
     }
 
     for (int i = 0; i < 5; ++i) {
