@@ -1,69 +1,109 @@
-#include<iostream>
+
+//#include <boost/algorithm/string/replace.hpp>
+#include <iostream>
 #include <fstream>
 #include <map>
-#include <thread>
 #include <vector>
-#include <set>
+#include <thread>
+#include <mutex>
+#include <sstream>
 #include <future>
 
+
 using namespace std;
+//g++ read.cpp -pthread -std=c++11
+using words_counter_t = map<string, int>;
+words_counter_t m;
 
 
-map<string, int> calcInterval(const vector<string>& myVector, int start, int end)
-{
-    map<string, int> localMp;
-
-    for (int i = start; i < end; i++) {
-        {
-            ++localMp[myVector[i]];
-        }
+void printMap(const words_counter_t &m) {
+    for (auto elem : m) {
+        cout << elem.first << " " << elem.second << "\n";
     }
-    return localMp;
-}
-void reduce(const map<string, int>& m, map<string, int> &master){
-
-    for(auto w: m){
-        master[w.first]+=w.second;
-    }
-
 }
 
-void wrapCalcInterval(const vector<string>& myVector,int start, int end,  promise<map<string,int>> result){
-    auto r = calcInterval(myVector, start, end);
-    result.set_value(r);
+
+vector<string> open_read(string path) {
+    ifstream myfile;
+    vector<string> words;
+    string word;
+    myfile.open(path);
+    if (!myfile.is_open()) {
+        cerr << "Error" << endl;
+        return words;
+    }
+    string formated_word;
+    while (myfile >> word) {
+        formated_word = word;  //format_word(word);
+        words.push_back(formated_word);
+        //        ++checkM[word];       // check map with only main thread
+    }
+    myfile.close();
+    return words;
+}
+
+//void write_to_file(const words_counter_t &m, string path) {
+//    ofstream myfile;
+//    myfile.open(path);
+//    for (auto elem : m) {
+//        myfile << elem.first << "    " << elem.second << "\n";
+//    }
+//    myfile.close();
+//}
+
+words_counter_t mapper(int start, int end, const vector<string> &words) {
+    words_counter_t mp;
+    for (int i = start; i < end; i++)
+    {
+        ++mp[words[i]];
+    }
+    return mp;
 
 }
 
-int main() {
-
-    vector<string> myVector;
-    vector<pair<string, int>> VectorOfPair;
-    map<string, int> m;
-
-    ifstream myReadFile;
-    string data;
-    myReadFile.open("data.txt");
-    string output;
-    if (!myReadFile.is_open()) {
-        cerr << "Error opening file ";
-        return -1; // exit(-1);
+void reducer( words_counter_t &master, const words_counter_t& mp){
+    for (auto w: mp) {
+        master[w.first] += w.second;
     }
-    while (myReadFile >> output) {//check state
-        for (size_t i = 0, len = output.size(); i < len; i++) {
-            if (ispunct(output[i])) {
-                output.erase(i--, 1);
-                len = output.size();
-            }
-        }
-        myVector.push_back(output);
-    }
-    myReadFile.close();
-
-    promise pr1, pr2;
-    future f1, f2;
-    f1 = pr1.get_future();
-    f2 = pr2.get_future();
-    thread(wrapCalcInterval, myVector, 0, 10, pr1);
-    thread(wrapCalcInterval, myVector, 10, 20, pr2);
-    reduce(m, );
 }
+
+
+void worker2(int l, int r, const vector<string> &words, promise<words_counter_t> p){
+    auto res = mapper(l, r, words);
+    p.set_value(res);
+}
+
+int main(int argc, char *argv[]) {  // input_file, threads, output_file
+    vector<string> words;
+    vector< future<words_counter_t> > result_futures;
+    if (!argv[1]) words = open_read("data.txt");
+    else words = open_read(argv[1]);
+    vector<thread> rthreads;
+    istringstream ss(argv[2]);
+
+    //ss >> x;
+    cout << "Spawning " << 2 << " workers" << endl;
+    for (int i = 0; i < 5; ++i) {
+        size_t a = (words.size()) / 5 * i;
+        size_t b = (words.size()) / 5 * (i + 1);
+//        cout << (i + 1) << " interval from " << a << " to " << b - 1 << " word" << endl;
+        promise<words_counter_t> rg;
+        result_futures.push_back(rg.get_future());
+        rthreads.push_back(thread(worker2, a, b - 1, cref(words), move(rg)));
+    }
+
+    vector<words_counter_t> results;
+    for(size_t i = 0; i<result_futures.size(); ++i)
+    {
+        reducer(m, result_futures[i].get());
+    }
+
+    for (int i = 0; i < 5; ++i) {
+        rthreads[i].join();
+    }
+
+
+    printMap(m);
+    return 0;
+}
+
