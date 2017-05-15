@@ -106,10 +106,11 @@ int main(int argc, char *argv[]) {  // input_file, threads, output_file
 
 
     for(size_t i = 0; i<result_futures.size(); ++i)
-    {
-        if(is_ready(result_futures[i])) {
-
-            reducer(m, result_futures[i].get());
+    {   if(!is_ready(result_futures[i])) {
+            this_thread::yield();
+        }
+        else{
+        reducer(m, result_futures[i].get());
         }
     }
 
