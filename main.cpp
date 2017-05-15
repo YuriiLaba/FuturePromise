@@ -1,54 +1,44 @@
-#include <iostream>
+#include<iostream>
 #include <fstream>
 #include <map>
 #include <thread>
 #include <vector>
-#include <algorithm>
 #include <set>
-#include <mutex>
-#include <chrono>
-#include <atomic>
 #include <future>
 
 using namespace std;
-mutex mtx;
 
 
-//for(x: lm)
-//gm[x.first] += x.sp
-//
-
-int finder(const vector<string>& myVector, future<int> &f,  future<int> &f1, std::map<string, int>& m)
+map<string, int> calcInterval(const vector<string>& myVector, int start, int end)
 {
     map<string, int> localMp;
-    int start = f.get();
-    int end = f1.get();
+
     for (int i = start; i < end; i++) {
         {
-            lock_guard<mutex> lg(mtx);
             ++localMp[myVector[i]];
         }
     }
-    lock_guard<mutex> lg(mtx);
+    return localMp;
+}
+void reduce(const map<string, int>& m, map<string, int> &master){
 
-    for(map<string, int> :: iterator i = localMp.begin(); i != localMp.end(); i++){
-        m[i->first] += i-> second;
-
+    for(auto w: m){
+        master[w.first]+=w.second;
     }
 
-    return end;
+}
+
+void wrapCalcInterval(const vector<string>& myVector,int start, int end,  promise<map<string,int>> result){
+    auto r = calcInterval(myVector, start, end);
+    result.set_value(r);
 
 }
 
 int main() {
 
-    int x;
-    int y;
     vector<string> myVector;
     vector<pair<string, int>> VectorOfPair;
     map<string, int> m;
-
-
 
     ifstream myReadFile;
     string data;
@@ -69,28 +59,11 @@ int main() {
     }
     myReadFile.close();
 
-
-    promise <int> p;
-    promise <int> p1;
-    future <int> f = p.get_future();
-    future <int> f1 = p1.get_future();
-
-
-    future<int> fu = async(launch::async, finder, cref(myVector),ref(f), ref(f1), ref(m));//child thread to parent thread
-    //future<int> fu1 = async(launch::async, finder, cref(myVector),3, 5, ref(m));
-    p.set_value(0);
-    p1.set_value(5);
-
-    x = fu.get();//wait until child process finish and return value from it
-    //y = fu1.get();
-
-
-    cout<<x<<endl;
-    cout<<m.size()<<endl;
-    for(map<string, int> :: iterator i = m.begin(); i != m.end(); i++){
-        cout <<    i -> first << ": " << i-> second << endl;
-
-    }
-
-
+    promise pr1, pr2;
+    future f1, f2;
+    f1 = pr1.get_future();
+    f2 = pr2.get_future();
+    thread(wrapCalcInterval, myVector, 0, 10, pr1);
+    thread(wrapCalcInterval, myVector, 10, 20, pr2);
+    reduce(m, );
 }
